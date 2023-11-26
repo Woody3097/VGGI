@@ -28,6 +28,78 @@ void main() {
     gl_FragColor = color;
 }`;
 
+const KleinBottle = (u, v, center=[0,0,0]) => {
+    let x = 2/15*(3+5*Math.cos(u)*Math.sin(u))*Math.sin(v);
+    let y = -1/15*Math.sin(u)*(3*Math.cos(v)-3*Math.pow(Math.cos(u),2)*Math.cos(v)-
+        48*Math.pow(Math.cos(u),4)*Math.cos(v)+48*Math.pow(Math.cos(u),6)*Math.cos(v)-
+        60*Math.sin(u)+5*Math.cos(u)*Math.cos(v)*Math.sin(u)-
+        5*Math.pow(Math.cos(u),3)*Math.cos(v)*Math.sin(u)-
+        80*Math.pow(Math.cos(u),5)*Math.cos(v)*Math.sin(u)+
+        80*Math.pow(Math.cos(u),7)*Math.cos(v)*Math.sin(u));
+    let z = -2/15*Math.cos(u)*(3*Math.cos(v)-30*Math.sin(u)+
+        90*Math.pow(Math.cos(u),4)*Math.sin(u)-60*Math.pow(Math.cos(u),6)*Math.sin(u)+
+        5*Math.cos(u)*Math.cos(v)*Math.sin(u));
+
+    return glMatrix.vec3.fromValues(x+center[0], y+center[1], z+center[2]);
+};
+
+const ParametricSurfaceData = (f, umin, umax, vmin, vmax, nu, nv,
+                               xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center=[0,0,0]) =>{
+    const du = (umax-umin)/(nu-1);
+    const dv = (vmax-vmin)/(nv-1);
+    let pts = [];
+    let u, v;
+    let pt;
+    let ymin1 = 0, ymax1 = 0;
+
+    for(let i = 0; i < nu; i++){
+        u = umin + i*du;
+        let pt1 = [];
+        for(let j = 0; j < nv; j++){
+            v = vmin + j*dv;
+            pt = f(u, v, center);
+            ymin1 = (pt[1] < ymin1) ? pt[1] : ymin1;
+            ymax1 = (pt[1] > ymax1) ? pt[1] : ymax1;
+            pt1.push(pt);
+
+        }
+        pts.push(pt1);
+
+    }
+
+    const ymin = ymin1 - scaley * (ymax1 - ymin1);
+    const ymax = ymax1 + scaley * (ymax1 - ymin1);
+
+    for(let i = 0; i < nu; i++){
+        for (let j = 0; j < nv; j++){
+            pts[i][j] =  NormalizePoint(pts[i][j], xmin, xmax, ymin, ymax, zmin, zmax, scale);
+        }
+    }
+
+    let p0, p1, p2, p3;
+    let vertex = []
+
+    for(let i = 0; i < nu - 1; i++){
+        for(let j = 0; j < nv - 1; j++){
+            p0 = pts[i][j];
+            p1 = pts[i+1][j];
+            p2 = pts[i+1][j+1];
+            p3 = pts[i][j+1];
+            vertex.push([
+                p0[0],p0[1],p0[2],p1[0],p1[1],p1[2],p2[0],p2[1],p2[2],
+                p2[0],p2[1],p2[2],p3[0],p3[1],p3[2],p0[0],p0[1],p0[2]].flat());
+        }
+    }
+    return new Float32Array(vertex.flat())
+};
+
+const NormalizePoint = (pt, xmin, xmax, ymin, ymax, zmin, zmax, scale = 1) => {
+    pt[0] = scale * (-1 + 2 * (pt[0] - xmin) / (xmax - xmin));
+    pt[1] = scale * (-1 + 2 * (pt[1] - ymin) / (ymax - ymin));
+    pt[2] = scale * (-1 + 2 * (pt[2] - zmin) / (zmax - zmin));
+    return pt;
+};
+
 function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
@@ -134,7 +206,7 @@ function initGL() {
     shProgram.iColor                     = gl.getUniformLocation(prog, "color");
 
     surface = new Model('Surface');
-    surface.BufferData(CreateSurfaceData());
+    surface.BufferData(ParametricSurfaceData(KleinBottle, 0, Math.PI, 0, 2*Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0,0,0]));
 
     gl.enable(gl.DEPTH_TEST);
 }
