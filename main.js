@@ -28,35 +28,35 @@ void main() {
     gl_FragColor = color;
 }`;
 
-const KleinBottle = (u, v, center=[0,0,0]) => {
-    let x = 2/15*(3+5*Math.cos(u)*Math.sin(u))*Math.sin(v);
-    let y = -1/15*Math.sin(u)*(3*Math.cos(v)-3*Math.pow(Math.cos(u),2)*Math.cos(v)-
-        48*Math.pow(Math.cos(u),4)*Math.cos(v)+48*Math.pow(Math.cos(u),6)*Math.cos(v)-
-        60*Math.sin(u)+5*Math.cos(u)*Math.cos(v)*Math.sin(u)-
-        5*Math.pow(Math.cos(u),3)*Math.cos(v)*Math.sin(u)-
-        80*Math.pow(Math.cos(u),5)*Math.cos(v)*Math.sin(u)+
-        80*Math.pow(Math.cos(u),7)*Math.cos(v)*Math.sin(u));
-    let z = -2/15*Math.cos(u)*(3*Math.cos(v)-30*Math.sin(u)+
-        90*Math.pow(Math.cos(u),4)*Math.sin(u)-60*Math.pow(Math.cos(u),6)*Math.sin(u)+
-        5*Math.cos(u)*Math.cos(v)*Math.sin(u));
+const KleinBottle = (u, v, center = [0, 0, 0]) => {
+    let x = 2 / 15 * (3 + 5 * Math.cos(u) * Math.sin(u)) * Math.sin(v);
+    let y = -1 / 15 * Math.sin(u) * (3 * Math.cos(v) - 3 * Math.pow(Math.cos(u), 2) * Math.cos(v) -
+        48 * Math.pow(Math.cos(u), 4) * Math.cos(v) + 48 * Math.pow(Math.cos(u), 6) * Math.cos(v) -
+        60 * Math.sin(u) + 5 * Math.cos(u) * Math.cos(v) * Math.sin(u) -
+        5 * Math.pow(Math.cos(u), 3) * Math.cos(v) * Math.sin(u) -
+        80 * Math.pow(Math.cos(u), 5) * Math.cos(v) * Math.sin(u) +
+        80 * Math.pow(Math.cos(u), 7) * Math.cos(v) * Math.sin(u));
+    let z = -2 / 15 * Math.cos(u) * (3 * Math.cos(v) - 30 * Math.sin(u) +
+        90 * Math.pow(Math.cos(u), 4) * Math.sin(u) - 60 * Math.pow(Math.cos(u), 6) * Math.sin(u) +
+        5 * Math.cos(u) * Math.cos(v) * Math.sin(u));
 
-    return glMatrix.vec3.fromValues(x+center[0], y+center[1], z+center[2]);
+    return glMatrix.vec3.fromValues(x + center[0], y + center[1], z + center[2]);
 };
 
 const ParametricSurfaceData = (f, umin, umax, vmin, vmax, nu, nv,
-                               xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center=[0,0,0]) =>{
-    const du = (umax-umin)/(nu-1);
-    const dv = (vmax-vmin)/(nv-1);
+                               xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center = [0, 0, 0]) => {
+    const du = (umax - umin) / (nu - 1);
+    const dv = (vmax - vmin) / (nv - 1);
     let pts = [];
     let u, v;
     let pt;
     let ymin1 = 0, ymax1 = 0;
 
-    for(let i = 0; i < nu; i++){
-        u = umin + i*du;
+    for (let i = 0; i < nu; i++) {
+        u = umin + i * du;
         let pt1 = [];
-        for(let j = 0; j < nv; j++){
-            v = vmin + j*dv;
+        for (let j = 0; j < nv; j++) {
+            v = vmin + j * dv;
             pt = f(u, v, center);
             ymin1 = (pt[1] < ymin1) ? pt[1] : ymin1;
             ymax1 = (pt[1] > ymax1) ? pt[1] : ymax1;
@@ -70,24 +70,75 @@ const ParametricSurfaceData = (f, umin, umax, vmin, vmax, nu, nv,
     const ymin = ymin1 - scaley * (ymax1 - ymin1);
     const ymax = ymax1 + scaley * (ymax1 - ymin1);
 
-    for(let i = 0; i < nu; i++){
-        for (let j = 0; j < nv; j++){
-            pts[i][j] =  NormalizePoint(pts[i][j], xmin, xmax, ymin, ymax, zmin, zmax, scale);
+    for (let i = 0; i < nu; i++) {
+        for (let j = 0; j < nv; j++) {
+            pts[i][j] = NormalizePoint(pts[i][j], xmin, xmax, ymin, ymax, zmin, zmax, scale);
         }
     }
 
     let p0, p1, p2, p3;
     let vertex = []
 
-    for(let i = 0; i < nu - 1; i++){
-        for(let j = 0; j < nv - 1; j++){
+    for (let i = 0; i < nu - 1; i++) {
+        for (let j = 0; j < nv - 1; j++) {
             p0 = pts[i][j];
-            p1 = pts[i+1][j];
-            p2 = pts[i+1][j+1];
-            p3 = pts[i][j+1];
+            p1 = pts[i + 1][j];
+            p2 = pts[i + 1][j + 1];
+            p3 = pts[i][j + 1];
             vertex.push([
-                p0[0],p0[1],p0[2],p1[0],p1[1],p1[2],p2[0],p2[1],p2[2],
-                p2[0],p2[1],p2[2],p3[0],p3[1],p3[2],p0[0],p0[1],p0[2]].flat());
+                p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
+                p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p0[0], p0[1], p0[2]].flat());
+        }
+    }
+    return new Float32Array(vertex.flat())
+};
+
+const ParametricNormalData = (f, umin, umax, vmin, vmax, nu, nv,
+                              xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center = [0, 0, 0]) => {
+    const du = (umax - umin) / (nu - 1);
+    const dv = (vmax - vmin) / (nv - 1);
+    let pts = [];
+    let u, v;
+    let pt;
+    let ymin1 = 0, ymax1 = 0;
+
+    for (let i = 0; i < nu; i++) {
+        u = umin + i * du;
+        let pt1 = [];
+        for (let j = 0; j < nv; j++) {
+            v = vmin + j * dv;
+            pt = f(u, v, center);
+            let n = NormalToPoint(u,v)
+            ymin1 = (pt[1] < ymin1) ? pt[1] : ymin1;
+            ymax1 = (pt[1] > ymax1) ? pt[1] : ymax1;
+            pt1.push(n);
+
+        }
+        pts.push(pt1);
+
+    }
+
+    const ymin = ymin1 - scaley * (ymax1 - ymin1);
+    const ymax = ymax1 + scaley * (ymax1 - ymin1);
+
+    for (let i = 0; i < nu; i++) {
+        for (let j = 0; j < nv; j++) {
+            pts[i][j] = NormalizePoint(pts[i][j], xmin, xmax, ymin, ymax, zmin, zmax, scale);
+        }
+    }
+
+    let p0, p1, p2, p3;
+    let vertex = []
+
+    for (let i = 0; i < nu - 1; i++) {
+        for (let j = 0; j < nv - 1; j++) {
+            p0 = pts[i][j];
+            p1 = pts[i + 1][j];
+            p2 = pts[i + 1][j + 1];
+            p3 = pts[i][j + 1];
+            vertex.push([
+                p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
+                p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p0[0], p0[1], p0[2]].flat());
         }
     }
     return new Float32Array(vertex.flat())
@@ -99,33 +150,57 @@ const NormalizePoint = (pt, xmin, xmax, ymin, ymax, zmin, zmax, scale = 1) => {
     pt[2] = scale * (-1 + 2 * (pt[2] - zmin) / (zmax - zmin));
     return pt;
 };
+let e = 0.0001;
+let NormalToPoint = (u, v) => {
+    let nu = KleinBottle(u, v),
+        uN = KleinBottle(u + e, v),
+        vN = KleinBottle(u, v + e),
+        dU = [],
+        dV = [];
+    for (let i = 0; i < 3; i++) {
+        dU.push((nu[i] - uN[i]) / e)
+        dV.push((nu[i] - vN[i]) / e)
+    }
+    let n = m4.normalize(m4.cross(dU, dV))
+    return n;
+}
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
 
-
 // Constructor
 function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
+    this.iNormalBuffer = gl.createBuffer();
     this.count = 0;
 
-    this.BufferData = function(vertices) {
+    this.BufferData = function (vertices) {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 
-        this.count = vertices.length/3;
+        this.count = vertices.length / 3;
+    }
+    this.NormalData = function (normals) {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
+
     }
 
-    this.Draw = function() {
+    this.Draw = function () {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
-   
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribNormal);
+
+        gl.drawArrays(gl.TRIANGLES, 0, this.count);
     }
 }
 
@@ -143,7 +218,7 @@ function ShaderProgram(name, program) {
     // Location of the uniform matrix representing the combined transformation.
     this.iModelViewProjectionMatrix = -1;
 
-    this.Use = function() {
+    this.Use = function () {
         gl.useProgram(this.prog);
     }
 }
@@ -153,41 +228,55 @@ function ShaderProgram(name, program) {
  * (Note that the use of the above drawPrimitive function is not an efficient
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
-function draw() { 
-    gl.clearColor(0,0,0,1);
+function draw() {
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
+
     /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/8, 1, 8, 12); 
-    
+    // let projection = m4.perspective(Math.PI / 8, 1, 8, 12);
+    let projection = m4.orthographic(-3, 3, -3, 3, -3, 3);
+
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
 
-    let rotateToPointZero = m4.axisRotation([0.707,0.707,0], 0.7);
-    let translateToPointZero = m4.translation(0,0,-10);
+    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+    let translateToPointZero = m4.translation(0, 0, -1);
 
-    let matAccum0 = m4.multiply(rotateToPointZero, modelView );
-    let matAccum1 = m4.multiply(translateToPointZero, matAccum0 );
-        
+    let matAccum0 = m4.multiply(rotateToPointZero, modelView);
+    let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+
     /* Multiply the projection matrix times the modelview matrix to give the
        combined transformation matrix, and send that to the shader program. */
-    let modelViewProjection = m4.multiply(projection, matAccum1 );
+    let modelViewProjection = m4.multiply(projection, matAccum1);
 
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
-    
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    let p = [
+        document.getElementById('px').value,
+        document.getElementById('py').value,
+        document.getElementById('pz').value,
+    ]
+    let d = [
+        document.getElementById('dx').value,
+        document.getElementById('dy').value,
+        document.getElementById('dz').value,
+    ]
+    gl.uniform3fv(shProgram.iPos, p);
+    gl.uniform3fv(shProgram.iDir, d);
+    gl.uniform1f(shProgram.iRange, document.getElementById('r').value);
+    gl.uniform1f(shProgram.iFocus, document.getElementById('f').value);
+
     /* Draw the six faces of a cube, with different colors. */
-    gl.uniform4fv(shProgram.iColor, [1,1,0,1] );
+    gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
 
     surface.Draw();
 }
 
-function CreateSurfaceData()
-{
+function CreateSurfaceData() {
     let vertexList = [];
 
-    for (let i=0; i<360; i+=5) {
-        vertexList.push( Math.sin(deg2rad(i)), 1, Math.cos(deg2rad(i)) );
-        vertexList.push( Math.sin(deg2rad(i)), 0, Math.cos(deg2rad(i)) );
+    for (let i = 0; i < 360; i += 5) {
+        vertexList.push(Math.sin(deg2rad(i)), 1, Math.cos(deg2rad(i)));
+        vertexList.push(Math.sin(deg2rad(i)), 0, Math.cos(deg2rad(i)));
     }
 
     return vertexList;
@@ -196,17 +285,23 @@ function CreateSurfaceData()
 
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
-    let prog = createProgram( gl, vertexShaderSource, fragmentShaderSource );
+    let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
     shProgram = new ShaderProgram('Basic', prog);
     shProgram.Use();
 
-    shProgram.iAttribVertex              = gl.getAttribLocation(prog, "vertex");
+    shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
+    shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
     shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
-    shProgram.iColor                     = gl.getUniformLocation(prog, "color");
+    shProgram.iColor = gl.getUniformLocation(prog, "color");
+    shProgram.iPos = gl.getUniformLocation(prog, "pos");
+    shProgram.iDir = gl.getUniformLocation(prog, "dir");
+    shProgram.iRange = gl.getUniformLocation(prog, "range");
+    shProgram.iFocus = gl.getUniformLocation(prog, "focus");
 
     surface = new Model('Surface');
-    surface.BufferData(ParametricSurfaceData(KleinBottle, 0, Math.PI, 0, 2*Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0,0,0]));
+    surface.BufferData(ParametricSurfaceData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
+    surface.NormalData(ParametricNormalData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
 
     gl.enable(gl.DEPTH_TEST);
 }
@@ -221,24 +316,24 @@ function initGL() {
  * source code for the vertex shader and for the fragment shader.
  */
 function createProgram(gl, vShader, fShader) {
-    let vsh = gl.createShader( gl.VERTEX_SHADER );
-    gl.shaderSource(vsh,vShader);
+    let vsh = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vsh, vShader);
     gl.compileShader(vsh);
-    if ( ! gl.getShaderParameter(vsh, gl.COMPILE_STATUS) ) {
+    if (!gl.getShaderParameter(vsh, gl.COMPILE_STATUS)) {
         throw new Error("Error in vertex shader:  " + gl.getShaderInfoLog(vsh));
-     }
-    let fsh = gl.createShader( gl.FRAGMENT_SHADER );
+    }
+    let fsh = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(fsh, fShader);
     gl.compileShader(fsh);
-    if ( ! gl.getShaderParameter(fsh, gl.COMPILE_STATUS) ) {
-       throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
+    if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS)) {
+        throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
     }
     let prog = gl.createProgram();
-    gl.attachShader(prog,vsh);
+    gl.attachShader(prog, vsh);
     gl.attachShader(prog, fsh);
     gl.linkProgram(prog);
-    if ( ! gl.getProgramParameter( prog, gl.LINK_STATUS) ) {
-       throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
     }
     return prog;
 }
@@ -252,7 +347,7 @@ function init() {
     try {
         canvas = document.getElementById("webglcanvas");
         gl = canvas.getContext("webgl");
-        if ( ! gl ) {
+        if (!gl) {
             throw "Browser does not support WebGL";
         }
     }
