@@ -8,9 +8,14 @@ let spaceball;                  // A SimpleRotator object that lets the user rot
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
+attribute vec3 normal;
 uniform mat4 ModelViewProjectionMatrix;
+varying vec3 norm;
+varying vec3 vert;
 
 void main() {
+    norm = normal;
+    vert = mat3(ModelViewProjectionMatrix) * vertex;
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
 }`;
 
@@ -23,9 +28,24 @@ const fragmentShaderSource = `
    precision mediump float;
 #endif
 
+varying vec3 norm;
+varying vec3 vert;
 uniform vec4 color;
+uniform vec3 dir;
+uniform vec3 pos;
+uniform float range, focus;
 void main() {
-    gl_FragColor = color;
+    vec3 toLight = normalize(pos-vert);
+    vec3 toView = normalize(-vert);
+    vec3 halfVector = normalize(toLight + toView);
+    vec3 N = normalize(norm);
+    float dotFromDirection = dot(toLight, 
+        -dir);
+    float inLight = smoothstep(range,range+focus, dotFromDirection);
+    float L = inLight * dot(N, toLight);
+    float specular = inLight * pow(dot(N, halfVector), 150.0);
+    vec3 clr = color.rgb*L+specular;
+    gl_FragColor = vec4(clr,1.0);
 }`;
 
 const KleinBottle = (u, v, center = [0, 0, 0]) => {
