@@ -4,7 +4,8 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
-
+let surfacePT;
+let line
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
@@ -46,6 +47,9 @@ void main() {
     float specular = inLight * pow(dot(N, halfVector), 150.0);
     vec3 clr = color.rgb*L+specular;
     gl_FragColor = vec4(clr,1.0);
+    if(focus<-50.0){
+        gl_FragColor = vec4(1.0);
+    }
 }`;
 
 const KleinBottle = (u, v, center = [0, 0, 0]) => {
@@ -128,7 +132,7 @@ const ParametricNormalData = (f, umin, umax, vmin, vmax, nu, nv,
         for (let j = 0; j < nv; j++) {
             v = vmin + j * dv;
             pt = f(u, v, center);
-            let n = NormalToPoint(u,v)
+            let n = NormalToPoint(u, v)
             ymin1 = (pt[1] < ymin1) ? pt[1] : ymin1;
             ymax1 = (pt[1] > ymax1) ? pt[1] : ymax1;
             pt1.push(n);
@@ -189,6 +193,39 @@ function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
 
+function CreateSphere() {
+    let vertexList = [];
+
+    let u = 0,
+        v = 0;
+    while (u < Math.PI * 2) {
+        while (v < Math.PI) {
+            let v1 = sphereVertex(u, v);
+            let v2 = sphereVertex(u + 0.1, v);
+            let v3 = sphereVertex(u, v + 0.1);
+            let v4 = sphereVertex(u + 0.1, v + 0.1);
+            vertexList.push(v1.x, v1.y, v1.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v4.x, v4.y, v4.z);
+            v += 0.1;
+        }
+        v = 0;
+        u += 0.1;
+    }
+    return vertexList
+}
+const radius = 0.1;
+function sphereVertex(long, lat) {
+    return {
+        x: radius * Math.cos(long) * Math.sin(lat),
+        y: radius * Math.sin(long) * Math.sin(lat),
+        z: radius * Math.cos(lat)
+    }
+}
+
 // Constructor
 function Model(name) {
     this.name = name;
@@ -221,6 +258,14 @@ function Model(name) {
         gl.enableVertexAttribArray(shProgram.iAttribNormal);
 
         gl.drawArrays(gl.TRIANGLES, 0, this.count);
+    }
+    this.DrawLine = function () {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribVertex);
+
+        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
     }
 }
 
@@ -271,8 +316,8 @@ function draw() {
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
     let p = [
-        document.getElementById('px').value,
-        document.getElementById('py').value,
+        2 * Math.cos(Date.now() * 0.001),
+        2 * Math.sin(Date.now() * 0.001),
         document.getElementById('pz').value,
     ]
     let d = [
@@ -281,7 +326,7 @@ function draw() {
         document.getElementById('dz').value,
     ]
     gl.uniform3fv(shProgram.iPos, p);
-    gl.uniform3fv(shProgram.iDir, d);
+    gl.uniform3fv(shProgram.iDir, [-p[0], -p[1], -p[2]]);
     gl.uniform1f(shProgram.iRange, document.getElementById('r').value);
     gl.uniform1f(shProgram.iFocus, document.getElementById('f').value);
 
@@ -289,6 +334,17 @@ function draw() {
     gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
 
     surface.Draw();
+    gl.uniform1f(shProgram.iFocus, -100);
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.multiply(modelViewProjection,
+        // m4.translation(Math.cos(Date.now()*0.001),Math.sin(Date.now()*0.001),pz)));
+        m4.translation(...p)));
+    surfacePT.Draw();
+    line.BufferData([-p[0], -p[1], -p[2], 0, 0, 0])
+    line.DrawLine()
+}
+function drawLight() {
+    draw()
+    window.requestAnimationFrame(drawLight)
 }
 
 function CreateSurfaceData() {
@@ -323,6 +379,11 @@ function initGL() {
     surface.BufferData(ParametricSurfaceData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
     surface.NormalData(ParametricNormalData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
 
+    surfacePT = new Model()
+    surfacePT.BufferData(CreateSphere())
+    surfacePT.NormalData(CreateSphere())
+    line = new Model()
+    line.BufferData([0, 0, 0, 1, 1, 1])
     gl.enable(gl.DEPTH_TEST);
 }
 
@@ -387,5 +448,5 @@ function init() {
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
-    draw();
+    drawLight();
 }
