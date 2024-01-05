@@ -5,16 +5,90 @@ let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
 let surfacePT;
-let line
+let line;
+let PT = [0.5, 0.5]
+let pts =
+    window.onkeydown = (e) => {
+        if (e.keyCode == 87) {
+            PT[0] = Math.min(PT[0] + 0.1, Math.PI);
+        }
+        else if (e.keyCode == 83) {
+            PT[0] = Math.max(PT[0] - 0.1, 0);
+        }
+        else if (e.keyCode == 68) {
+            PT[1] = Math.min(PT[1] + 0.1, Math.PI * 2);
+        }
+        else if (e.keyCode == 65) {
+            PT[1] = Math.max(PT[1] - 0.1, 0);
+        }
+        draw()
+    }
+
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec2 texture;
 uniform mat4 ModelViewProjectionMatrix;
 varying vec3 norm;
 varying vec3 vert;
+varying vec2 tex;
+uniform vec2 uv;
+uniform float angle;
+
+mat4 translation(vec3 t) {
+    mat4 dst;
+
+    dst[0][0] = 1.0;
+    dst[0][ 1] = 0.0;
+    dst[0][ 2] = 0.0;
+    dst[0][ 3] = 0.0;
+    dst[1][ 0] = 0.0;
+    dst[1][ 1] = 1.0;
+    dst[1][ 2] = 0.0;
+    dst[1][ 3] = 0.0;
+    dst[2][ 0] = 0.0;
+    dst[2][ 1] = 0.0;
+    dst[2][ 2] = 1.0;
+    dst[2][ 3] = 0.0;
+    dst[3][ 0] = t.x;
+    dst[3][ 1] = t.y;
+    dst[3][ 2] = t.z;
+    dst[3][ 3] = 1.0;
+
+    return dst;
+}
+
+mat4 rotation(float angleInRadians) {
+    mat4 dst;
+    float c = cos(angleInRadians);
+    float s = sin(angleInRadians);
+
+    dst[0][0] = c;
+    dst[0][ 1] = s;
+    dst[0][ 2] = 0.0;
+    dst[0][ 3] = 0.0;
+    dst[1][ 0] = -s;
+    dst[1][ 1] = c;
+    dst[1][ 2] = 0.0;
+    dst[1][ 3] = 0.0;
+    dst[2][ 0] = 0.0;
+    dst[2][ 1] = 0.0;
+    dst[2][ 2] = 1.0;
+    dst[2][ 3] = 0.0;
+    dst[3][ 0] = 0.0;
+    dst[3][ 1] = 0.0;
+    dst[3][ 2] = 0.0;
+    dst[3][ 3] = 1.0;
+
+    return dst;
+}
 
 void main() {
+    vec4 t1 = translation(vec3(-uv,0))*vec4(texture,0.,1.);
+    vec4 t2 = rotation(angle)*t1;
+    vec4 t3 = translation(vec3(uv,0))*t2;
+    tex=t3.st;
     norm = normal;
     vert = mat3(ModelViewProjectionMatrix) * vertex;
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
@@ -29,12 +103,14 @@ const fragmentShaderSource = `
    precision mediump float;
 #endif
 
+varying vec2 tex;
 varying vec3 norm;
 varying vec3 vert;
 uniform vec4 color;
 uniform vec3 dir;
 uniform vec3 pos;
 uniform float range, focus;
+uniform sampler2D tmu;
 void main() {
     vec3 toLight = normalize(pos-vert);
     vec3 toView = normalize(-vert);
@@ -46,9 +122,10 @@ void main() {
     float L = inLight * dot(N, toLight);
     float specular = inLight * pow(dot(N, halfVector), 150.0);
     vec3 clr = color.rgb*L+specular;
-    gl_FragColor = vec4(clr,1.0);
+    vec4 texColor = texture2D(tmu,tex);
+    gl_FragColor = texColor;
     if(focus<-50.0){
-        gl_FragColor = vec4(1.0);
+        gl_FragColor = vec4(1.0,0.,0.,1.);
     }
 }`;
 
@@ -66,7 +143,7 @@ const KleinBottle = (u, v, center = [0, 0, 0]) => {
 
     return glMatrix.vec3.fromValues(x + center[0], y + center[1], z + center[2]);
 };
-
+let ymin = null, ymax = null
 const ParametricSurfaceData = (f, umin, umax, vmin, vmax, nu, nv,
                                xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center = [0, 0, 0]) => {
     const du = (umax - umin) / (nu - 1);
@@ -91,8 +168,8 @@ const ParametricSurfaceData = (f, umin, umax, vmin, vmax, nu, nv,
 
     }
 
-    const ymin = ymin1 - scaley * (ymax1 - ymin1);
-    const ymax = ymax1 + scaley * (ymax1 - ymin1);
+    ymin = ymin1 - scaley * (ymax1 - ymin1);
+    ymax = ymax1 + scaley * (ymax1 - ymin1);
 
     for (let i = 0; i < nu; i++) {
         for (let j = 0; j < nv; j++) {
@@ -168,6 +245,68 @@ const ParametricNormalData = (f, umin, umax, vmin, vmax, nu, nv,
     return new Float32Array(vertex.flat())
 };
 
+function drawTextureRotation(){
+    draw()
+    window.requestAnimationFrame(drawTextureRotation)
+}
+const ParametricTextureData = (f, umin, umax, vmin, vmax, nu, nv,
+                               xmin, xmax, zmin, zmax, scale = 1, scaley = 0, center = [0, 0, 0]) => {
+    const du = (umax - umin) / (nu - 1);
+    const dv = (vmax - vmin) / (nv - 1);
+    let pts = [];
+    let u, v;
+    let pt;
+    let ymin1 = 0, ymax1 = 0;
+
+    for (let i = 0; i < nu; i++) {
+        u = umin + i * du;
+        let pt1 = [];
+        for (let j = 0; j < nv; j++) {
+            v = vmin + j * dv;
+            pt = f(u, v, center);
+            let n = NormalToPoint(u, v)
+            ymin1 = (pt[1] < ymin1) ? pt[1] : ymin1;
+            ymax1 = (pt[1] > ymax1) ? pt[1] : ymax1;
+            pt1.push(pt)
+        }
+        pts.push(pt1);
+
+    }
+
+    const ymin = ymin1 - scaley * (ymax1 - ymin1);
+    const ymax = ymax1 + scaley * (ymax1 - ymin1);
+
+    for (let i = 0; i < nu; i++) {
+        for (let j = 0; j < nv; j++) {
+            pts[i][j] = NormalizePoint(pts[i][j], xmin, xmax, ymin, ymax, zmin, zmax, scale);
+        }
+    }
+
+    let p0, p1, p2, p3;
+    let vertex = []
+
+    for (let i = 0; i < nu - 1; i++) {
+        for (let j = 0; j < nv - 1; j++) {
+            p0 = pts[i][j];
+            p1 = pts[i + 1][j];
+            p2 = pts[i + 1][j + 1];
+            p3 = pts[i][j + 1];
+            vertex.push([
+                i / nu, j / nv,
+                (i + 1) / nu, j / nv,
+                (i + 1) / nu, (j + 1) / nv,
+                (i + 1) / nu, (j + 1) / nv,
+                i / nu, (j + 1) / nv,
+                i / nu, j / nv,
+            ].flat())
+            // vertex.push([
+            //     p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
+            //     p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p0[0], p0[1], p0[2]].flat());
+        }
+    }
+    return new Float32Array(vertex.flat())
+};
+
 const NormalizePoint = (pt, xmin, xmax, ymin, ymax, zmin, zmax, scale = 1) => {
     pt[0] = scale * (-1 + 2 * (pt[0] - xmin) / (xmax - xmin));
     pt[1] = scale * (-1 + 2 * (pt[1] - ymin) / (ymax - ymin));
@@ -231,6 +370,7 @@ function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
+    this.iTextureBuffer = gl.createBuffer();
     this.count = 0;
 
     this.BufferData = function (vertices) {
@@ -246,6 +386,12 @@ function Model(name) {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
 
     }
+    this.TextureData = function (textures) {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textures), gl.STREAM_DRAW);
+
+    }
 
     this.Draw = function () {
 
@@ -257,15 +403,11 @@ function Model(name) {
         gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribNormal);
 
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribTexture, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribTexture);
+
         gl.drawArrays(gl.TRIANGLES, 0, this.count);
-    }
-    this.DrawLine = function () {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
-
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
     }
 }
 
@@ -316,8 +458,8 @@ function draw() {
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
     let p = [
-        2 * Math.cos(Date.now() * 0.001),
-        2 * Math.sin(Date.now() * 0.001),
+        document.getElementById('px').value,
+        document.getElementById('py').value,
         document.getElementById('pz').value,
     ]
     let d = [
@@ -326,25 +468,21 @@ function draw() {
         document.getElementById('dz').value,
     ]
     gl.uniform3fv(shProgram.iPos, p);
-    gl.uniform3fv(shProgram.iDir, [-p[0], -p[1], -p[2]]);
+    gl.uniform3fv(shProgram.iDir, d);
     gl.uniform1f(shProgram.iRange, document.getElementById('r').value);
     gl.uniform1f(shProgram.iFocus, document.getElementById('f').value);
+    gl.uniform1f(shProgram.iAngle, document.getElementById('a').value);
+    gl.uniform2fv(shProgram.iUV, [PT[0] / Math.PI, 0.5 * PT[1] / Math.PI]);
 
     /* Draw the six faces of a cube, with different colors. */
     gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
 
     surface.Draw();
     gl.uniform1f(shProgram.iFocus, -100);
+    let pt = KleinBottle(...PT)
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.multiply(modelViewProjection,
-        // m4.translation(Math.cos(Date.now()*0.001),Math.sin(Date.now()*0.001),pz)));
-        m4.translation(...p)));
+        m4.translation(...NormalizePoint(pt, -2, 2, ymin, ymax, -2, 2, 2))));
     surfacePT.Draw();
-    line.BufferData([-p[0], -p[1], -p[2], 0, 0, 0])
-    line.DrawLine()
-}
-function drawLight() {
-    draw()
-    window.requestAnimationFrame(drawLight)
 }
 
 function CreateSurfaceData() {
@@ -368,22 +506,26 @@ function initGL() {
 
     shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
     shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
+    shProgram.iAttribTexture = gl.getAttribLocation(prog, "texture");
     shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
     shProgram.iColor = gl.getUniformLocation(prog, "color");
     shProgram.iPos = gl.getUniformLocation(prog, "pos");
     shProgram.iDir = gl.getUniformLocation(prog, "dir");
     shProgram.iRange = gl.getUniformLocation(prog, "range");
     shProgram.iFocus = gl.getUniformLocation(prog, "focus");
+    shProgram.iAngle = gl.getUniformLocation(prog, "angle");
+    shProgram.iUV = gl.getUniformLocation(prog, "uv");
 
     surface = new Model('Surface');
     surface.BufferData(ParametricSurfaceData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
     surface.NormalData(ParametricNormalData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
+    surface.TextureData(ParametricTextureData(KleinBottle, 0, Math.PI, 0, 2 * Math.PI, 50, 15, -2, 2, -2, 2, 2, 0, [0, 0, 0]));
 
-    surfacePT = new Model()
+    surfacePT = new Model();
     surfacePT.BufferData(CreateSphere())
     surfacePT.NormalData(CreateSphere())
-    line = new Model()
-    line.BufferData([0, 0, 0, 1, 1, 1])
+    surfacePT.TextureData(CreateSphere())
+
     gl.enable(gl.DEPTH_TEST);
 }
 
@@ -447,6 +589,30 @@ function init() {
     }
 
     spaceball = new TrackballRotator(canvas, draw, 0);
+    LoadTexture()
+    drawTextureRotation();
+}
 
-    drawLight();
+function LoadTexture() {
+    let texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const image = new Image();
+    image.crossOrigin = 'anonymus';
+    image.src = "texture.jpg";
+    image.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            image
+        );
+        console.log("imageLoaded")
+        draw()
+    }
 }
